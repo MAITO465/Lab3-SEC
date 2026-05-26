@@ -1,4 +1,5 @@
 # Compte Rendu du Lab 3 : Observation du Trafic HTTP(S) avec Burp Suite
+>### Auteur : AIT OURAJLI MOHAMED
 
 ## 1. Introduction et Objectifs
 Dans le cadre de ce laboratoire, nous avons mis en place une architecture d'interception réseau de type Proxy (via Burp Suite) entre un émulateur Android et une application web de test. L'objectif était de valider la configuration du routage et de capturer les échanges HTTP pour comprendre concrètement les mécanismes sous-jacents aux communications mobiles.
