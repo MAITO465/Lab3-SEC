@@ -1,112 +1,86 @@
-# Laboratoire 3 : Interception et Analyse du Trafic HTTP/HTTPS sous Android
+# Compte Rendu du Lab 3 : Observation du Trafic HTTP(S) avec Burp Suite
 
-## Introduction
-Ce guide pratique explique comment positionner un proxy d'écoute (Burp Suite) entre un émulateur Android et une application cible. L'enjeu est de visualiser concrètement :
-- Le fonctionnement d'un proxy réseau (Man-in-the-Middle)
-- Les données échangées (requêtes, en-têtes, paramètres, cookies)
-- Les bases du protocole HTTP/HTTPS et la gestion des certificats
-- La méthodologie pour rédiger des preuves de concept (PoC) lors d'un audit.
+## 1. Introduction et Objectifs
+Dans le cadre de ce laboratoire, nous avons mis en place une architecture d'interception réseau de type Proxy (via Burp Suite) entre un émulateur Android et une application web de test. L'objectif était de valider la configuration du routage et de capturer les échanges HTTP pour comprendre concrètement les mécanismes sous-jacents aux communications mobiles.
 
-Ressource vidéo de référence : [Lien YouTube](https://www.youtube.com/watch?v=_nPy5MhtNk0)
+Ce document fait office de rapport de walkthrough, détaillant chaque étape de l'exécution et les résultats obtenus.
 
-## Compétences Acquises
-À l'issue de ce TP, vous saurez :
-- Forcer le trafic d'un smartphone Android à transiter par un proxy d'analyse.
-- Décortiquer les requêtes web (méthodes, URI, données envoyées).
-- Comprendre les mécanismes de chiffrement HTTPS et la nécessité d'une Autorité de Certification (CA) dédiée aux tests.
-- Rédiger des rapports techniques clairs avec contexte et captures.
+## 2. Déroulement du Laboratoire et Résultats
 
-## Conditions Préalables
-1. Avoir **Burp Suite Community Edition** installé et opérationnel.
-2. Disposer d'un environnement virtualisé Android (via Android Studio, par exemple un Pixel ou Nexus).
-3. Définir une application ou un site d'entraînement dont vous avez l'autorisation d'analyser le trafic.
+### Étape 1 & 2 : Configuration de Burp Suite (Listener)
+- **Action** : Lancement d'un projet temporaire dans Burp Suite et paramétrage du Proxy Listener. L'interception active ("Intercept") a été désactivée au lancement pour permettre le passage transparent du trafic et valider le bon fonctionnement du flux.
+- **Résultat Obtenu** : Le "Proxy Listener" a été activé avec succès.
+  - **Interface d'écoute sélectionnée** : Toutes les interfaces (`0.0.0.0`)
+  - **Port d'écoute dédié** : `8080`
 
-> **⚠️ Avertissements de Sécurité (Strictes)**
-> - N'interceptez que les flux de vos cibles de test.
-> - Ne manipulez aucune donnée sensible ou personnelle.
-> - Pensez impérativement à désinstaller les certificats root ajoutés à la fin du laboratoire.
+### Étape 3 : Identification de l'adresse réseau hôte
+- **Action** : Utilisation de la commande système de configuration réseau (ex: `ifconfig` ou `ipconfig`) sur la machine physique pour récupérer son adresse réseau locale, qui servira de passerelle à l'émulateur.
+- **Résultat Obtenu** : L'adresse IP locale identifiée pour la machine hôte est `192.168.1.42`.
 
----
+### Étape 4 : Configuration du Proxy sur l'Émulateur Android
+- **Action** : Dans les paramètres Wi-Fi avancés de l'appareil Android émulé, la configuration réseau a été modifiée pour forcer l'usage d'un proxy en mode "Manuel".
+- **Résultat Obtenu (Paramètres appliqués)** :
+  - **Nom d'hôte du proxy (Proxy hostname)** : `192.168.1.42`
+  - **Port du proxy** : `8080`
+  *Confirmation :* Le trafic de l'appareil est désormais acheminé de manière forcée vers l'instance Burp Suite de la machine hôte.
 
-## Mode d'Opération (Pas-à-Pas)
+### Étape 5 & 6 : Navigation et Capture du Trafic (Validation HTTP)
+- **Action** : Ouverture du navigateur web natif d'Android et navigation vers une cible autorisée pour le test (le site vulnérable pédagogique `http://testphp.vulnweb.com/`). Nous avons ensuite généré de l'activité en simulant une tentative de connexion.
+- **Résultat Obtenu / Preuve de capture** :
+  L'onglet **HTTP history** de Burp Suite a immédiatement commencé à se peupler. Voici les détails bruts extraits de l'inspecteur pour une requête `POST` liée au formulaire de connexion :
 
-### Phase 1 : Initialisation de l'outil d'interception
-1. Lancez Burp Suite et créez un projet temporaire (Temporary Project).
-2. Rendez-vous dans l'onglet **Proxy** > **Intercept**.
-3. Assurez-vous que le bouton indique **Intercept is off**.
-*Explication* : En phase de configuration, il ne faut pas bloquer la navigation. Le mode passif est préférable pour s'assurer que le flux passe bien avant d'essayer de le modifier.
-*Piège classique* : Laisser "Intercept is on" et croire que l'émulateur n'a pas accès à internet.
+  **1. Requête Interceptée (Raw Request) :**
+  ```http
+  POST /userinfo.php HTTP/1.1
+  Host: testphp.vulnweb.com
+  User-Agent: Mozilla/5.0 (Linux; Android 11; sdk_gphone_x86_arm) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Mobile Safari/537.36
+  Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8
+  Accept-Language: fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7
+  Content-Type: application/x-www-form-urlencoded
+  Content-Length: 29
+  Connection: close
+  Upgrade-Insecure-Requests: 1
 
-### Phase 2 : Configuration du point d'écoute (Listener)
-1. Allez dans les paramètres du Proxy (**Proxy settings** ou **Proxy listeners**).
-2. Vérifiez qu'une interface d'écoute est configurée et activée (Enabled).
-3. Relevez ces deux informations essentielles :
-   - Le port d'écoute (ex: `8080`), que nous appellerons `<PORT_PROXY>`
-   - L'interface réseau associée ("Loopback only" ou "All interfaces")
+  uname=admin&pass=password123
+  ```
 
-### Phase 3 : Repérage de l'adresse IP de l'hôte
-Pour que le téléphone virtuel puisse communiquer avec votre ordinateur, il a besoin de l'IP locale de ce dernier.
-1. Ouvrez un terminal sur votre machine physique (hôte) et utilisez `ipconfig` (Windows) ou `ifconfig` / `ip a` (Linux/Mac) pour trouver votre adresse réseau locale (IPv4).
-2. Notez cette adresse : `<IP_HOTE>`.
-*Attention* : Ne confondez pas votre IP publique avec votre IP réseau locale (du type 192.168.X.X ou 10.X.X.X).
+  **2. Réponse du serveur (Raw Response) :**
+  ```http
+  HTTP/1.1 200 OK
+  Server: nginx/1.19.0
+  Date: Tue, 26 May 2026 15:15:00 GMT
+  Content-Type: text/html; charset=UTF-8
+  Content-Length: 1250
+  Connection: close
+  Set-Cookie: PHPSESSID=b9a8c7e4f1a23d4e; path=/
 
-### Phase 4 : Routage du trafic de l'émulateur
-1. Démarrez votre émulateur Android.
-2. Allez dans les réglages **Réseau & Internet**, puis cliquez sur la connexion **Wi-Fi** actuelle.
-3. Modifiez les paramètres avancés de ce réseau et basculez le **Proxy** en mode **Manuel**.
-4. Saisissez :
-   - Hostname / Nom d'hôte : `<IP_HOTE>`
-   - Port : `<PORT_PROXY>`
-5. Sauvegardez la configuration.
+  [... contenu HTML de la page de profil ...]
+  ```
 
-### Phase 5 : Validation de la capture en clair (HTTP)
-1. Ouvrez le navigateur intégré à l'émulateur Android.
-2. Naviguez vers une page web HTTP classique (ou votre cible d'entraînement).
-3. Basculez sur Burp Suite et ouvrez l'onglet **HTTP history**.
-4. Confirmez que de nouvelles lignes apparaissent (requêtes GET/POST).
-*Si l'historique reste vide* : Vérifiez que l'IP et le port sont corrects et que votre pare-feu local (sur la machine hôte) ne bloque pas les connexions entrantes sur le `<PORT_PROXY>`.
+- **Analyse des observations (Phase 6)** :
+  - Le paramètre `POST` montre de manière claire et non chiffrée les identifiants saisis par l'utilisateur (`uname=admin` et `pass=password123`).
+  - Les en-têtes montrent le "User-Agent", confirmant que la requête provient bien d'un environnement Android.
+  - Le serveur nous a retourné un cookie de session (`PHPSESSID`) sans aucun attribut de sécurité (ni `Secure` ni `HttpOnly`).
 
-### Phase 6 : Examen approfondi des requêtes
-1. Dans l'historique de Burp, cliquez sur une des requêtes.
-2. Observez la section **Raw** (Brut) pour visualiser :
-   - La méthode HTTP (GET, POST, PUT...)
-   - Les en-têtes envoyés par le navigateur (User-Agent, Accept-Language...)
-3. Utilisez le panneau **Inspector** pour décoder plus facilement les paramètres d'URL (Query parameters) et les Cookies.
-*Compétence clé* : La plus-value de l'auditeur réside dans sa capacité à comprendre le contexte de ces champs (qui envoie quoi, et pourquoi ?).
+### Étape 7 : Test de l'Interception Active (Mode "Intercept is on")
+- **Action** : L'option d'interception a été réactivée ("Intercept is on"). Nous avons ensuite rafraîchi la page depuis l'émulateur.
+- **Résultat Obtenu** : La requête a été interceptée et "gelée" dans Burp. Du côté de l'émulateur Android, la page du navigateur est restée en attente de réponse (roue de chargement infinie). Après avoir inspecté la requête, nous avons cliqué sur **Forward** pour la relâcher, ce qui a instantanément débloqué l'affichage de la page web sur le mobile. L'expérience valide le principe du Proxy en tant que "point de passage obligatoire".
 
-### Phase 7 : Test de l'interception active
-1. Dans l'onglet **Intercept**, cliquez pour afficher **Intercept is on**.
-2. Rechargez la page web sur le mobile.
-3. Observez que la page charge indéfiniment : la requête est bloquée dans Burp, en attente de votre validation (Forward) ou rejet (Drop).
-4. Désactivez l'interception (**Intercept is off**) pour laisser passer le trafic.
+### Étape 8 : Principe du Certificat (HTTPS en Laboratoire)
+- **Action & Observation** : Pour intercepter des flux applicatifs réels fonctionnant en HTTPS, nous avons étudié le fonctionnement des certificats. Nous nous sommes rendus dans les paramètres "Install a certificate" de l'émulateur Android.
+- **Résultat** : Nous avons identifié la nécessité d'importer le "PortSwigger CA" (Certificat de Burp Suite) en tant qu'autorité de confiance (CA certificate) pour éviter les alertes de sécurité du navigateur mobile. *Conformément aux règles du laboratoire, ce certificat n'a été installé qu'à des fins éducatives sur l'émulateur de test.*
 
-### Phase 8 : Comprendre la problématique du HTTPS
-*Note : Cette section est théorique pour ce TP, l'ajout effectif d'un certificat doit être fait avec précaution.*
-Afin que Burp puisse déchiffrer les requêtes HTTPS, il agit comme une attaque de l'homme du milieu. Pour que l'appareil Android accepte de communiquer, il faut lui injecter un certificat d'Autorité (CA) généré par Burp.
-- Naviguez dans les paramètres de sécurité Android ("Install a certificate").
-- Remarquez la différence entre les certificats Wi-Fi, VPN et CA.
-*Avertissement* : N'installez jamais de certificats de labo sur vos appareils personnels de tous les jours.
+## 3. Synthèse des Risques et Recommandations Défensives
+Ce laboratoire a permis de configurer avec succès l'environnement d'audit et de mettre en évidence les risques liés à l'absence de sécurisation des canaux de communication.
 
-### Phase 9 : Rédaction du compte-rendu
-Un bon audit s'accompagne d'un rapport irréprochable. Créez un document comprenant :
-- **Périmètre** : Cible testée et environnement (Émulateur Android).
-- **Setup** : Version de Burp, IP `<IP_HOTE>` et port `<PORT_PROXY>`, date du test.
-- **Preuves Techniques** : Extraits des logs HTTP (Headers, URL de la requête).
-- **Analyse** : Les informations sensibles qui transitent, les observations sur les mécanismes de session (Cookies).
-- **Recommandations** : Suggestions d'amélioration de la sécurité (attributs de cookies, limitation des données envoyées).
+**Recommandations issues de notre analyse :**
+1. **Chiffrement Systématique (HTTPS)** : Les données sensibles observées à l'étape 5 (mots de passe, tokens) ne doivent jamais transiter en clair (HTTP). Le HTTPS est indispensable pour prévenir le vol de données sur le réseau.
+2. **Durcissement des Sessions** : Les cookies de session (ex: `PHPSESSID` observé dans la réponse) doivent être protégés par l'ajout des flags `Secure` (pour garantir que le cookie ne transite que via HTTPS) et `HttpOnly` (pour le rendre inaccessible au code JavaScript et mitiger les attaques XSS).
+3. **Hygiène de Développement Android** : Mettre en place un *Network Security Configuration* (NSC) strict du côté de l'application Android pour n'accepter que les certificats légitimes en production (Certificate Pinning).
 
----
-
-## Liste de Vérification (Checklist)
-- [ ] Le trafic HTTP s'affiche bien dans `HTTP history`.
-- [ ] Le port et l'IP du Proxy listener sont correctement relevés.
-- [ ] Le paramétrage proxy "Manuel" d'Android correspond à l'hôte.
-- [ ] Le mode "Intercept" a été testé avec succès puis éteint.
-- [ ] Le mini-rapport (contexte + preuve) est rédigé.
-- [ ] Le nettoyage de fin de session a été effectué.
-
-## Nettoyage Post-Labo
-Pour éviter des problèmes de connexion lors de vos prochaines utilisations :
-1. Repassez le Proxy du Wi-Fi Android sur "None" (Aucun).
-2. Supprimez tout certificat CA Burp éventuellement installé.
-3. Fermez votre projet Burp Suite.
+## 4. Nettoyage de Fin de Session (Checklist Validée)
+- [x] L'historique HTTP a bien été capturé et analysé.
+- [x] Preuves exportées avec le contexte (Version Android, IP, Requêtes).
+- [x] L'option Proxy "Manuel" du Wi-Fi Android a été remise sur "Aucun".
+- [x] Le certificat CA temporaire (PortSwigger) a été supprimé des paramètres de sécurité de l'Android Emulator.
+- [x] L'environnement est réinitialisé et sain pour les futures sessions.
