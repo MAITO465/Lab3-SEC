@@ -85,3 +85,6 @@ Ce laboratoire a permis de configurer avec succès l'environnement d'audit et de
 - [x] L'option Proxy "Manuel" du Wi-Fi Android a été remise sur "Aucun".
 - [x] Le certificat CA temporaire (PortSwigger) a été supprimé des paramètres de sécurité de l'Android Emulator.
 - [x] L'environnement est réinitialisé et sain pour les futures sessions.
+
+---
+**Auteur : AIT OURAJLI MOHAMED**
